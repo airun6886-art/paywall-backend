@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     }
 
     const supaRes = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/users?email=eq.${email}&select=acceso_premium,estado_pago`,
+      `${process.env.SUPABASE_URL}/rest/v1/users2?email=eq.${email}&select=acceso_premium,estado_pago`,
       {
         headers: {
           "apikey": process.env.SUPABASE_SERVICE_ROLE_KEY,
