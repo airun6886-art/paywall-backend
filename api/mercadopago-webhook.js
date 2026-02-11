@@ -27,7 +27,7 @@ export default async function handler(req, res) {
       const email = payment.payer?.email;
 
       // Actualizar en Supabase
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/users?email=eq.${email}`, {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/users2?email=eq.${email}`, {
         method: "PATCH",
         headers: {
           "apikey": process.env.SUPABASE_SERVICE_ROLE_KEY,
