@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -33,7 +31,7 @@ export default async function handler(req, res) {
     const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.MP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(preference),
