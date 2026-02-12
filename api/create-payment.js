@@ -12,6 +12,7 @@ export default async function handler(req, res) {
           title: "Acceso Premium",
           quantity: 1,
           unit_price: 100,
+          currency_id: "MXN", // 👈 IMPORTANTE para México
         },
       ],
       payer: { email },
@@ -40,4 +41,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Error creando pago" });
   }
 }
-
