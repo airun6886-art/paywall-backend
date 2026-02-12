@@ -1,10 +1,6 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
-    const { email } = req.body;
+    const email = req.method === "POST" ? req.body.email : req.query.email;
 
     if (!email) {
       return res.status(400).json({ error: "Email requerido" });
@@ -15,7 +11,7 @@ export default async function handler(req, res) {
         {
           title: "Acceso Premium",
           quantity: 1,
-          unit_price: 100, // precio de prueba
+          unit_price: 100,
         },
       ],
       payer: { email },
@@ -44,3 +40,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Error creando pago" });
   }
 }
+
