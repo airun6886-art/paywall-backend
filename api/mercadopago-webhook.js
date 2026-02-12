@@ -1,14 +1,6 @@
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
-
-  // ===== DEBUG WEBHOOK =====
-  console.log("=== Webhook recibido ===");
-  console.log("Método HTTP:", req.method);
-  console.log("Query params:", req.query);
-  console.log("Body:", req.body);
-  // =========================
-
   try {
     const { type, data } = req.query;
 
@@ -34,12 +26,8 @@ export default async function handler(req, res) {
 
     const payment = await mpRes.json();
 
-    console.log("Pago obtenido desde MercadoPago:", payment);
-
     if (payment.status === "approved") {
       const email = payment.payer?.email;
-
-      console.log("Email del pagador:", email);
 
       // Actualizar en Supabase
       await fetch(
@@ -59,15 +47,13 @@ export default async function handler(req, res) {
           }),
         }
       );
-
-      console.log("Usuario actualizado en Supabase");
     }
 
     return res.status(200).send("ok");
-
   } catch (err) {
-    console.error("Error en webhook:", err);
+    console.error(err);
     return res.status(500).send("error");
   }
 }
+
 
