@@ -1,14 +1,12 @@
-import fetch from "node-fetch";
-
 export default async function handler(req, res) {
   try {
     const { payment_id, status, external_reference } = req.query;
 
-    if (!payment_id || !status || !external_reference) {
+    if (!payment_id || !external_reference) {
       return res.status(400).json({ error: "Faltan parámetros" });
     }
 
-    // Verificar pago real con MercadoPago
+    // 1️⃣ Verificar pago real con MercadoPago
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${payment_id}`, {
       headers: {
         Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
@@ -25,7 +23,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Actualizar Supabase
+    // 2️⃣ Activar premium en Supabase
     const sbRes = await fetch(
       `${process.env.SUPABASE_URL}/rest/v1/users2?email=eq.${external_reference}`,
       {
@@ -38,25 +36,22 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           acceso_premium: true,
-          estado_pago: "approved",
         }),
       }
     );
 
     if (!sbRes.ok) {
-      const t = await sbRes.text();
-      console.error("Error Supabase:", t);
-      return res.status(500).json({ error: "Error actualizando Supabase" });
+      const err = await sbRes.text();
+      return res.status(500).json({ error: err });
     }
 
     return res.status(200).json({
       ok: true,
       message: "Pago verificado y usuario activado como premium",
-      payment_id,
-      email: external_reference,
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Error en verificación de pago" });
+    return res.status(500).json({ error: "Error interno" });
   }
 }
+
