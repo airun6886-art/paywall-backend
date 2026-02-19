@@ -35,16 +35,23 @@ export default async function handler(req, res) {
           apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
           "Content-Type": "application/json",
+          Prefer: "return=representation"
         },
         body: JSON.stringify({
-          email,
-          acceso_premium: false,
-          estado_pago: "pending",
+          email: email,
         }),
       }
     );
 
-    const newUser = await insertRes.json();
+    // ⚠️ Manejo seguro del body
+    const text = await insertRes.text();
+
+    if (!insertRes.ok) {
+      console.error("Supabase error:", text);
+      return res.status(500).json({ error: text });
+    }
+
+    const newUser = text ? JSON.parse(text) : null;
 
     return res.status(200).json({
       message: "Usuario creado",
@@ -52,7 +59,8 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Server error:", error);
     return res.status(500).json({ error: "Error creando usuario" });
   }
 }
+
