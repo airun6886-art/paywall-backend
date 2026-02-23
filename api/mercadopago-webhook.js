@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import fetch from "node-fetch";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,48 +6,67 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+  console.log("🔥 Webhook llamado");
+
   try {
-    const body = req.body;
+    // ✅ MercadoPago puede enviar POST o GET
+    const paymentId =
+      req.body?.data?.id ||
+      req.query?.data_id ||
+      req.query?.id;
 
-    console.log("Webhook recibido:", body);
+    console.log("Payment ID recibido:", paymentId);
 
-    // Solo pagos
-    if (body.type !== "payment") {
+    if (!paymentId) {
+      console.log("⚠️ No payment_id");
       return res.status(200).send("ok");
     }
 
-    const paymentId = body.data.id;
-
-    // Consultar pago real en MercadoPago
-    const response = await fetch(
+    // ✅ Consultar pago REAL en MercadoPago
+    const mpResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
         },
       }
     );
 
-    const payment = await response.json();
+    const payment = await mpResponse.json();
 
-    if (payment.status === "approved") {
-      const email = payment.payer.email;
+    console.log("Estado pago:", payment.status);
 
-      await supabase
-        .from("users2")
-        .update({
-          estado_pago: "approved",
-          acceso_premium: true,
-          payment_id: paymentId,
-        })
-        .eq("email", email);
-
-      console.log("✅ Premium activado:", email);
+    if (payment.status !== "approved") {
+      return res.status(200).send("ok");
     }
 
-    res.status(200).send("ok");
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("error");
+    const email = payment.external_reference;
+
+    console.log("Activando premium para:", email);
+
+    // ✅ Actualizar Supabase
+    const { error } = await supabase
+      .from("users2")
+      .update({
+        acceso_premium: true,
+        estado_pago: "approved",
+        payment_id: paymentId,
+      })
+      .eq("email", email);
+
+    if (error) {
+      console.error("Supabase error:", error);
+    } else {
+      console.log("✅ Usuario actualizado");
+    }
+
+    return res.status(200).send("ok");
+  } catch (err) {
+    console.error("🔥 ERROR WEBHOOK:", err);
+
+    // ⚠️ IMPORTANTE:
+    // MercadoPago necesita 200 aunque haya error
+    return res.status(200).send("ok");
   }
 }
