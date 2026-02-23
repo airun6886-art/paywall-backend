@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import fetch from "node-fetch";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -6,27 +7,26 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  console.log("🔥 Webhook llamado");
-
   try {
-    // ✅ MercadoPago puede enviar POST o GET
+    console.log("🔥 WEBHOOK HIT");
+    console.log("METHOD:", req.method);
+    console.log("BODY:", JSON.stringify(req.body));
+
     const paymentId =
       req.body?.data?.id ||
-      req.query?.data_id ||
-      req.query?.id;
+      req.query["data.id"];
 
-    console.log("Payment ID recibido:", paymentId);
+    console.log("Payment ID:", paymentId);
 
     if (!paymentId) {
-      console.log("⚠️ No payment_id");
+      console.log("⚠️ No payment_id recibido");
       return res.status(200).send("ok");
     }
 
-    // ✅ Consultar pago REAL en MercadoPago
+    // CONSULTAR MP
     const mpResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
-        method: "GET",
         headers: {
           Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
         },
@@ -35,9 +35,10 @@ export default async function handler(req, res) {
 
     const payment = await mpResponse.json();
 
-    console.log("Estado pago:", payment.status);
+    console.log("Pago MP:", payment);
 
     if (payment.status !== "approved") {
+      console.log("Pago no aprobado");
       return res.status(200).send("ok");
     }
 
@@ -45,8 +46,7 @@ export default async function handler(req, res) {
 
     console.log("Activando premium para:", email);
 
-    // ✅ Actualizar Supabase
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("users2")
       .update({
         acceso_premium: true,
@@ -55,18 +55,12 @@ export default async function handler(req, res) {
       })
       .eq("email", email);
 
-    if (error) {
-      console.error("Supabase error:", error);
-    } else {
-      console.log("✅ Usuario actualizado");
-    }
+    console.log("Supabase result:", data);
+    console.log("Supabase error:", error);
 
-    return res.status(200).send("ok");
+    res.status(200).send("ok");
   } catch (err) {
     console.error("🔥 ERROR WEBHOOK:", err);
-
-    // ⚠️ IMPORTANTE:
-    // MercadoPago necesita 200 aunque haya error
-    return res.status(200).send("ok");
+    res.status(500).send("error");
   }
 }
