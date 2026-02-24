@@ -1,4 +1,3 @@
-console.log("USER ID:", req.body.user_id);
 import { createClient } from "@supabase/supabase-js";
 import fetch from "node-fetch";
 
@@ -12,6 +11,11 @@ export default async function handler(req, res) {
     console.log("🔥 WEBHOOK HIT");
     console.log("METHOD:", req.method);
     console.log("BODY:", JSON.stringify(req.body));
+    console.log("USER ID:", req.body?.user_id);
+
+    if (req.method !== "POST") {
+      return res.status(200).send("ok");
+    }
 
     const paymentId =
       req.body?.data?.id ||
@@ -20,11 +24,9 @@ export default async function handler(req, res) {
     console.log("Payment ID:", paymentId);
 
     if (!paymentId) {
-      console.log("⚠️ No payment_id recibido");
       return res.status(200).send("ok");
     }
 
-    // CONSULTAR MP
     const mpResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
@@ -35,17 +37,13 @@ export default async function handler(req, res) {
     );
 
     const payment = await mpResponse.json();
-
     console.log("Pago MP:", payment);
 
     if (payment.status !== "approved") {
-      console.log("Pago no aprobado");
       return res.status(200).send("ok");
     }
 
     const email = payment.external_reference;
-
-    console.log("Activando premium para:", email);
 
     const { data, error } = await supabase
       .from("users2")
@@ -59,9 +57,9 @@ export default async function handler(req, res) {
     console.log("Supabase result:", data);
     console.log("Supabase error:", error);
 
-    res.status(200).send("ok");
+    return res.status(200).send("ok");
   } catch (err) {
     console.error("🔥 ERROR WEBHOOK:", err);
-    res.status(500).send("error");
+    return res.status(500).send("error");
   }
 }
