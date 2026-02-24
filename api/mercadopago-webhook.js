@@ -10,17 +10,13 @@ export default async function handler(req, res) {
   try {
     console.log("🔥 WEBHOOK HIT");
     console.log("METHOD:", req.method);
+    console.log("BODY:", JSON.stringify(req.body));
 
     if (req.method !== "POST") {
       return res.status(200).send("ok");
     }
 
-    console.log("BODY:", JSON.stringify(req.body));
-
-    const paymentId =
-      req.body?.data?.id ||
-      req.query["data.id"];
-
+    const paymentId = req.body?.data?.id || req.body?.id;
     console.log("Payment ID:", paymentId);
 
     if (!paymentId) {
@@ -28,56 +24,48 @@ export default async function handler(req, res) {
       return res.status(200).send("ok");
     }
 
-    // 🔎 Consultar pago real en MercadoPago
-    const mpResponse = await fetch(
-      `https://api.mercadopago.com/v1/payments/${paymentId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
-        },
-      }
-    );
+    // Paso 1: Revisar si ya existe este payment_id
+    const { data: existingPayment, error: checkError } = await supabase
+      .from("users2")
+      .select("*")
+      .eq("payment_id", paymentId)
+      .single();
 
-    const payment = await mpResponse.json();
+    if (existingPayment) {
+      console.log("⚠️ Payment ID ya registrado, evitando doble activación:", paymentId);
+      return res.status(200).send("ok");
+    }
 
-    console.log("Pago MP status:", payment.status);
+    // Paso 2: Consultar pago real en MercadoPago
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+    });
+
+    const payment = await mpRes.json();
+    console.log("Pago MP:", payment);
 
     if (payment.status !== "approved") {
-      console.log("Pago no aprobado aún");
+      console.log("Pago no aprobado, abortando");
       return res.status(200).send("ok");
     }
 
-    const email = payment.external_reference;
+    const email = payment.external_reference; // tu email enviado desde create-payment
 
-    if (!email) {
-      console.log("⚠️ No external_reference (email)");
-      return res.status(200).send("ok");
-    }
-
-    console.log("Activando premium para:", email);
-
-    // 🚀 UPSERT (crea si no existe, actualiza si existe)
+    // Paso 3: Upsert para evitar duplicados
     const { data, error } = await supabase
       .from("users2")
       .upsert(
         {
-          email: email,
-          acceso_premium: true,
+          email,
           estado_pago: "approved",
+          acceso_premium: true,
           payment_id: paymentId,
         },
-        { onConflict: "email" }
+        { onConflict: "email" } // evita crear fila nueva si email ya existe
       );
 
     console.log("Supabase result:", data);
     console.log("Supabase error:", error);
-
-    if (error) {
-      console.error("❌ Error actualizando Supabase:", error);
-      return res.status(500).send("error");
-    }
-
-    console.log("✅ Usuario premium activado correctamente");
 
     return res.status(200).send("ok");
   } catch (err) {
