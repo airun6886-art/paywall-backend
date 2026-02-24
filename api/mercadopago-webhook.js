@@ -1,10 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 import fetch from "node-fetch";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// FUNCION PARA VALIDAR FIRMA (opcional, producción)
+function validateMpSignature(req) {
+  const mpHeader = req.headers["x-mp-signature"];
+  if (!mpHeader || !process.env.MP_WEBHOOK_KEY) return false;
+  const hash = crypto
+    .createHmac("sha256", process.env.MP_WEBHOOK_KEY)
+    .update(JSON.stringify(req.body))
+    .digest("hex");
+  return hash === mpHeader;
+}
 
 export default async function handler(req, res) {
   try {
@@ -12,31 +24,23 @@ export default async function handler(req, res) {
     console.log("METHOD:", req.method);
     console.log("BODY:", JSON.stringify(req.body));
 
-    if (req.method !== "POST") {
-      return res.status(200).send("ok");
-    }
+    if (req.method !== "POST") return res.status(200).send("ok");
+
+    // Validación de firma (descomentar si se configura MP webhook secret)
+    // if (!validateMpSignature(req)) {
+    //   console.log("❌ Firma inválida");
+    //   return res.status(401).send("invalid signature");
+    // }
 
     const paymentId = req.body?.data?.id || req.body?.id;
-    console.log("Payment ID:", paymentId);
-
     if (!paymentId) {
       console.log("⚠️ No payment_id recibido");
       return res.status(200).send("ok");
     }
 
-    // Paso 1: Revisar si ya existe este payment_id
-    const { data: existingPayment, error: checkError } = await supabase
-      .from("users2")
-      .select("*")
-      .eq("payment_id", paymentId)
-      .single();
+    console.log("Payment ID:", paymentId);
 
-    if (existingPayment) {
-      console.log("⚠️ Payment ID ya registrado, evitando doble activación:", paymentId);
-      return res.status(200).send("ok");
-    }
-
-    // Paso 2: Consultar pago real en MercadoPago
+    // CONSULTAR PAGO REAL EN MERCADOPAGO
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
     });
@@ -49,9 +53,13 @@ export default async function handler(req, res) {
       return res.status(200).send("ok");
     }
 
-    const email = payment.external_reference; // tu email enviado desde create-payment
+    const email = payment.external_reference;
+    if (!email) {
+      console.log("⚠️ No external_reference, no se puede asignar usuario");
+      return res.status(200).send("ok");
+    }
 
-    // Paso 3: Upsert para evitar duplicados
+    // UPSERT SEGURO - evita doble activación
     const { data, error } = await supabase
       .from("users2")
       .upsert(
@@ -61,11 +69,14 @@ export default async function handler(req, res) {
           acceso_premium: true,
           payment_id: paymentId,
         },
-        { onConflict: "email" } // evita crear fila nueva si email ya existe
+        {
+          onConflict: ["payment_id"], // si payment_id ya existe → no hace nada
+          ignoreDuplicates: true,     // retries no rompen la tabla
+        }
       );
 
-    console.log("Supabase result:", data);
-    console.log("Supabase error:", error);
+    if (error) console.log("⚠️ Error Supabase:", error);
+    else console.log("✅ Usuario activado/upsert:", data);
 
     return res.status(200).send("ok");
   } catch (err) {
