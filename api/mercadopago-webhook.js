@@ -1,3 +1,4 @@
+console.log("USER ID:", req.body.user_id);
 import { createClient } from "@supabase/supabase-js";
 import fetch from "node-fetch";
 
